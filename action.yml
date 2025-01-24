@@ -71,12 +71,6 @@ runs:
         fi
         printf '%s/bin' "$prefix_dir" >> $GITHUB_PATH
 
-        # Install kubectl binary
-        curl -LO "https://dl.k8s.io/release/${{ inputs.kubectl-version }}/bin/linux/amd64/kubectl"
-        chmod +x kubectl
-        mv kubectl "${prefix_dir}/bin"
-
-
         # If the dagger version is 'latest', set the version back to an empty
         # string. This allows the install script to detect and install the latest
         # version itself
@@ -90,6 +84,11 @@ runs:
         # The install.sh script creates path ${prefix_dir}/bin
         curl -fsS https://dl.dagger.io/dagger/install.sh \
         | BIN_DIR=${prefix_dir}/bin DAGGER_VERSION="$VERSION" DAGGER_COMMIT="$COMMIT" sh
+
+        # Install kubectl binary
+        curl -LO "https://dl.k8s.io/release/${{ inputs.kubectl-version }}/bin/linux/amd64/kubectl"
+        chmod +x kubectl
+        mv kubectl "${prefix_dir}/bin"
 
     - id: exec
       shell: bash
