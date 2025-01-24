@@ -76,14 +76,6 @@ runs:
         chmod +x kubectl
         mv kubectl "${prefix_dir}/bin"
 
-        # Find Dagger engine pod name in specified namespace
-        DAGGER_ENGINE_POD_NAME=$(kubectl get pod \
-          --selector=${{ inputs.dagger-engine-pod-selector }} \
-          --namespace=${{ inputs.dagger-engine-namespace }} \
-          --output=jsonpath='{.items[0].metadata.name}')
-
-        # Set Kubernetes pod runner host
-        export _EXPERIMENTAL_DAGGER_RUNNER_HOST="kube-pod://$DAGGER_ENGINE_POD_NAME?namespace=${{ inputs.dagger-engine-namespace }}"
 
         # If the dagger version is 'latest', set the version back to an empty
         # string. This allows the install script to detect and install the latest
@@ -100,14 +92,27 @@ runs:
         | BIN_DIR=${prefix_dir}/bin DAGGER_VERSION="$VERSION" DAGGER_COMMIT="$COMMIT" sh
 
     - id: exec
+      shell: bash
+      run: |
+        # Find Dagger engine pod name in specified namespace
+        DAGGER_ENGINE_POD_NAME=$(kubectl get pod \
+          --selector=${{ inputs.dagger-engine-pod-selector }} \
+          --namespace=${{ inputs.dagger-engine-namespace }} \
+          --output=jsonpath='{.items[0].metadata.name}')
+
+        # Set Kubernetes pod runner host
+        export _EXPERIMENTAL_DAGGER_RUNNER_HOST="kube-pod://$DAGGER_ENGINE_POD_NAME?namespace=${{ inputs.dagger-engine-namespace }}"
+
+    - id: exec
       if: inputs.call != '' || inputs.args != ''
       shell: bash
       env:
         INPUT_MODULE: ${{ inputs.module }}
       run: |
         tmpout=$(mktemp)
+        export dagger_engine_pod=$(kubectl get pod --selector=${{ inputs.dagger-engine-pod-selector }} --namespace=${{ inputs.dagger-engine-namespace }} --output=jsonpath='{.items[0].metadata.name}')
         cd ${{ inputs.workdir }} && { \
-        DAGGER_CLOUD_TOKEN=${{ inputs.cloud-token }} \
+        _EXPERIMENTAL_DAGGER_RUNNER_HOST="kube-pod://$dagger_engine_pod?namespace=${{ inputs.dagger-engine-namespace }}" \
         dagger \
         ${{ inputs.dagger-flags }} \
         ${{ inputs.verb }} \
@@ -124,11 +129,3 @@ runs:
           echo
           echo "${delim}"
         } >> "$GITHUB_OUTPUT"
-
-    - if: (inputs.call != '' || inputs.args != '') && inputs.engine-stop == 'true'
-      shell: bash
-      run: |
-        mapfile -t containers < <(docker ps --filter name="dagger-engine-*" -q)
-        if [[ "${#containers[@]}" -gt 0 ]]; then
-          docker stop -t 300 "${containers[@]}";
-        fi
