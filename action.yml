@@ -1,5 +1,5 @@
-name: "Dagger for GitHub"
-description: "Run dagger commands in Github Actions"
+name: "Dagger for Kubernetes"
+description: "Run dagger commands in Kubernetes"
 inputs:
   version:
     description: "Dagger Version"
@@ -41,6 +41,14 @@ inputs:
     description: "Function and arguments for dagger call"
     required: false
     default: ""
+  dagger-engine-namespace:
+    description: "Namespace of Dagger engine pod"
+    required: false
+    default: "dagger"
+  dagger-engine-pod-selector:
+    description: "Kubernetes pod selector for Dagger engine"
+    required: false
+    default: "name=dagger-dagger-helm-engine"
 outputs:
   output:
     description: "Job output"
@@ -58,6 +66,15 @@ runs:
             prefix_dir="$(mktemp -d)"
         fi
         printf '%s/bin' "$prefix_dir" >> $GITHUB_PATH
+
+        # Find Dagger engine pod name in specified namespace
+        DAGGER_ENGINE_POD_NAME=$(kubectl get pod \
+          --selector=${{ inputs.dagger-engine-pod-selector }} \
+          --namespace=${{ inputs.dagger-engine-namespace }} \
+          --output=jsonpath='{.items[0].metadata.name}')
+
+        # Set Kubernetes pod runner host
+        export _EXPERIMENTAL_DAGGER_RUNNER_HOST="kube-pod://$DAGGER_ENGINE_POD_NAME?namespace=${{ inputs.dagger-engine-namespace }}"
 
         # If the dagger version is 'latest', set the version back to an empty
         # string. This allows the install script to detect and install the latest
